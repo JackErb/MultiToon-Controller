@@ -13,16 +13,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 
 
-    func applicationDidFinishLaunching(aNotification: NSNotification) {
+    func applicationDidFinishLaunching(_ aNotification: Notification) {
         // Insert code here to initialize your application
         
         // This is pretty hacky but I don't understand Cocoa and didn't want to take time to learn it.
         // Sets the ViewController as the first responder of the window so that it gets key events.
         ViewController.sharedController.view.window!.makeFirstResponder(ViewController.sharedController)
-        ViewController.sharedController.view.window!.level = Int(CGWindowLevelForKey(.MaximumWindowLevelKey))
+        ViewController.sharedController.view.window!.level = Int(CGWindowLevelForKey(.maximumWindow))
     }
 
-    func applicationWillTerminate(aNotification: NSNotification) {
+    func applicationWillTerminate(_ aNotification: Notification) {
         // Insert code here to tear down your application
     }
 

@@ -14,7 +14,7 @@ class ViewController: NSViewController {
     // Allow ViewController to be a first responder (i.e. respond to key/mouse events)
     override var acceptsFirstResponder: Bool { return true }
     
-    var keySendMode = KeySendMode.Mirror
+    var keySendMode = KeySendMode.mirror
     
     // Information of the applications this program will be sending info to.
     // Used for Mirror-Mode.
@@ -39,7 +39,7 @@ class ViewController: NSViewController {
     // Is searching for applications
     var sendKeyStrokes = false {
         willSet {
-            playAndStopButton.state = Int(newValue)
+            playAndStopButton.state = newValue ? 1 : 0
             
             guard let keyEventDelegate = keyEventDelegate as? KeyEventSender else {
                 return
@@ -69,7 +69,7 @@ class ViewController: NSViewController {
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as NSString: true]
  
             // Sends user to System Preferences -> Accessibility to give this program permission
-            AXIsProcessTrustedWithOptions(options)
+            AXIsProcessTrustedWithOptions(options as CFDictionary?)
         }
         
         if !AXIsProcessTrusted() {
@@ -78,84 +78,84 @@ class ViewController: NSViewController {
         
         
         // Global monitor for event KeyDown. This triggers if a key is pushed down while in the background.
-        NSEvent.addGlobalMonitorForEventsMatchingMask(.KeyDownMask, handler: keyDown)
+        NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: self.keyDown(with:))
         
         // Global monitor for event KeyUp. This triggers if a key is released while in the background.
-        NSEvent.addGlobalMonitorForEventsMatchingMask(.KeyUpMask, handler: keyUp)
+        NSEvent.addGlobalMonitorForEvents(matching: .keyUp, handler: self.keyUp(with:))
         
         // Global monitor for event FlagsChanged. This triggers if a key is released while in the background.
-        NSEvent.addGlobalMonitorForEventsMatchingMask(.FlagsChangedMask, handler: flagsChanged)
+        NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, handler: self.flagsChanged(with:))
         
         
-        tableView.setDelegate(self)
-        tableView.setDataSource(self)
+        tableView.delegate = self
+        tableView.dataSource = self
         
         tableView.target = self
         tableView.doubleAction = #selector(ViewController.tableViewDoubleClick(_:))
         tableView.resignFirstResponder()
     }
     
-    func animateProgressIndicator(bool: Bool) {
+    func animateProgressIndicator(_ bool: Bool) {
         if bool {
-            progressIndicator.hidden = false
+            progressIndicator.isHidden = false
             progressIndicator.startAnimation(nil)
         } else {
-            progressIndicator.hidden = true
+            progressIndicator.isHidden = true
             progressIndicator.stopAnimation(nil)
         }
     }
     
-    override func keyDown(event: NSEvent) {
+    override func keyDown(with event: NSEvent) {
         keyEventDelegate?.keyDown(event, sender: self)
     }
     
-    override func keyUp(event: NSEvent) {
+    override func keyUp(with event: NSEvent) {
         keyEventDelegate?.keyUp(event, sender: self)
     }
     
-    override func flagsChanged(event: NSEvent) {
+    override func flagsChanged(with event: NSEvent) {
         keyEventDelegate?.flagsChanged(event, sender: self)
     }
     
     // Refresh toontown application list
-    @IBAction func refreshButtonAction(sender: NSButton) {
+    @IBAction func refreshButtonAction(_ sender: NSButton) {
         searchForToontownApplications(sender: self)
     }
     
     // Either stop or start key event sending
-    @IBAction func playAndStopButtonAction(sender: NSButton) {
-        sendKeyStrokes = Bool(sender.state)
+    @IBAction func playAndStopButtonAction(_ sender: NSButton) {
+        sendKeyStrokes = sender.state == 1 ? true : false
     }
     
-    @IBAction func targetButtonAction(sender: AnyObject) {
+    @IBAction func targetButtonAction(_ sender: AnyObject) {
         // Remove self as observer in case the user has already pressed this button.
         // This is just so the event isn't being observed twice.
-        NSWorkspace.sharedWorkspace().notificationCenter.removeObserver(self)
+        NSWorkspace.shared().notificationCenter.removeObserver(self)
         
-        NSWorkspace.sharedWorkspace().notificationCenter.addObserver(self, selector: #selector(self.frontmostApplicationDidChange(_:)), name: NSWorkspaceDidActivateApplicationNotification, object: nil)
+        NSWorkspace.shared().notificationCenter.addObserver(self, selector: #selector(self.frontmostApplicationDidChange(_:)), name: NSNotification.Name.NSWorkspaceDidActivateApplication, object: nil)
         
         animateProgressIndicator(true)
     }
     
-    @IBAction func keySendModeToggleButton(sender: AnyObject) {
+    @IBAction func keySendModeToggleButton(_ sender: AnyObject) {
         switch keySendMode {
-        case .Multi:
-            keySendMode = .Mirror
+        case .multi:
+            keySendMode = .mirror
             tableView.reloadData()
-        case .Mirror:
-            keySendMode = .Multi
+        case .mirror:
+            keySendMode = .multi
             
             searchForToontownApplications(sender: self)
             tableView.reloadData()
         }
     }
     
-    func frontmostApplicationDidChange(notification: NSNotification) {
+    func frontmostApplicationDidChange(_ notification: Notification) {
         let psn = getProcessSerialNumberOfFrontmostApplication()
         
-        ttApplications.append(ApplicationInfo(application: NSWorkspace.sharedWorkspace().frontmostApplication!, psn: psn))
+        ttApplications.append(ApplicationInfo(application: NSWorkspace.shared().frontmostApplication!, psn: psn))
         
-        NSWorkspace.sharedWorkspace().notificationCenter.removeObserver(self)
+        NSWorkspace.shared().notificationCenter.removeObserver(self)
         animateProgressIndicator(false)
 
     }
@@ -163,24 +163,24 @@ class ViewController: NSViewController {
 
 
 extension ViewController: NSTableViewDataSource {
-    func numberOfRowsInTableView(tableView: NSTableView) -> Int {
-        return keySendMode == .Mirror ? ttApplications.count : 2
+    func numberOfRows(in tableView: NSTableView) -> Int {
+        return keySendMode == .mirror ? ttApplications.count : 2
     }
 }
 
 extension ViewController: NSTableViewDelegate {
-    func tableView(tableView: NSTableView, viewForTableColumn tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        if let cell = tableView.makeViewWithIdentifier("ApplicationsCell", owner: nil) as? NSTableCellView {
-            if keySendMode == .Mirror {
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        if let cell = tableView.make(withIdentifier: "ApplicationsCell", owner: nil) as? NSTableCellView {
+            if keySendMode == .mirror {
                 cell.textField?.stringValue = ttApplications[row].application.localizedName ?? "Unnamed"
-                cell.imageView?.image = ttApplications[row].activated ? NSImage(imageLiteral: "thumbs-up") : NSImage(imageLiteral: "thumbs-down")
+                cell.imageView?.image = ttApplications[row].activated ? NSImage(named: "thumbs-up") : NSImage(named: "thumbs-down")
             } else {
                 var app: ApplicationInfo? = nil
                 if row == 0 { app = toontownApplication1 }
                 else if row == 1 { app = toontownApplication2 }
                 
                 cell.textField?.stringValue = app?.application.localizedName ?? "Not found"
-                cell.imageView?.image = app?.activated ?? false ? NSImage(imageLiteral: "thumbs-up") : NSImage(imageLiteral: "thumbs-down")
+                cell.imageView?.image = app?.activated ?? false ?  NSImage(named: "thumbs-up") : NSImage(named: "thumbs-down")
             }
 
             return cell
@@ -190,8 +190,8 @@ extension ViewController: NSTableViewDelegate {
     
     
     // Not part of the protocol but used to deal with `NSTableView` events
-    func tableViewDoubleClick(sender: AnyObject) {
-        if keySendMode == .Multi { return }
+    func tableViewDoubleClick(_ sender: AnyObject) {
+        if keySendMode == .multi { return }
         
         guard tableView.selectedRow >= 0 else {
             return

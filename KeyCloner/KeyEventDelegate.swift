@@ -12,13 +12,13 @@ protocol KeyEventDelegate {
     // The keyboard lists all keys that are currently down and should be updated whenever keyDown or keyUp is called.
     var keyboard: Keyboard { get }
     
-    func keyDown(event: NSEvent, sender: ViewController)
-    func keyUp(event: NSEvent, sender: ViewController)
-    func flagsChanged(event: NSEvent, sender: ViewController)
+    func keyDown(_ event: NSEvent, sender: ViewController)
+    func keyUp(_ event: NSEvent, sender: ViewController)
+    func flagsChanged(_ event: NSEvent, sender: ViewController)
 }
 
 enum KeySendMode {
-    case Multi, Mirror
+    case multi, mirror
 }
 
 // This class sends key events to target applications specified in the sender
@@ -27,14 +27,14 @@ class KeyEventSender: KeyEventDelegate {
     
     // Checks to see if the specified key is a hard-coded hot key. Returns true if it was.
     // TO DO: Allow customization of hot keys and also add more for more functionality.
-    func checkHotkeys(event: NSEvent, sender: ViewController) -> Bool {
+    func checkHotkeys(_ event: NSEvent, sender: ViewController) -> Bool {
         let key = Key(value: event.keyCode)
         
         switch key {
-        case .F5:
+        case .f5:
             searchForToontownApplications(sender: sender)
             return true
-        case .Grave:
+        case .grave:
             // The animation is just to provide some visual feedback to the user so they know the button press did something.
             sender.animateProgressIndicator(true)
             delay (0.25) {
@@ -42,15 +42,15 @@ class KeyEventSender: KeyEventDelegate {
             }
             
             sender.sendKeyStrokes = true
-            NSRunningApplication.currentApplication().activateWithOptions(.ActivateIgnoringOtherApps)
+            NSRunningApplication.current().activate(options: .activateIgnoringOtherApps)
             
             // This is to delete the ` key that was pressed in the application
-            postKeyEvent(withKeyCode: Key.Delete.keyCode, isDown: true, sender: sender, postNoMatterWhat: true)
-            delay (0.1) { self.postKeyEvent(withKeyCode: Key.Delete.keyCode, isDown: false, sender: sender, postNoMatterWhat: true) }
+            postKeyEvent(withKeyCode: Key.delete.keyCode, isDown: true, sender: sender, postNoMatterWhat: true)
+            delay (0.1) { self.postKeyEvent(withKeyCode: Key.delete.keyCode, isDown: false, sender: sender, postNoMatterWhat: true) }
             return true
-        case .ForwardDelete:
-            if sender.tableView.selectedRow >= 0 && sender.keySendMode == .Mirror {
-                sender.ttApplications.removeAtIndex(sender.tableView.selectedRow)
+        case .forwardDelete:
+            if sender.tableView.selectedRow >= 0 && sender.keySendMode == .mirror {
+                sender.ttApplications.remove(at: sender.tableView.selectedRow)
             }
             return true
         default:
@@ -58,20 +58,20 @@ class KeyEventSender: KeyEventDelegate {
         }
     }
     
-    func keyDown(event: NSEvent, sender: ViewController) {
+    func keyDown(_ event: NSEvent, sender: ViewController) {
         // Pressed keys which are hotKeys are not sent to the target application
         if !checkHotkeys(event, sender: sender) {
             postKeyEvent(withKeyCode: event.keyCode, isDown: true, sender: sender)
         }
     }
     
-    func keyUp(event: NSEvent, sender: ViewController) {
+    func keyUp(_ event: NSEvent, sender: ViewController) {
         postKeyEvent(withKeyCode: event.keyCode, isDown: false, sender: sender)
     }
     
-    func flagsChanged(event: NSEvent, sender: ViewController) {
-        if sender.keySendMode == .Mirror {
-            postKeyEvent(withKeyCode: Key.Count.keyCode, isDown: false, sender: sender)
+    func flagsChanged(_ event: NSEvent, sender: ViewController) {
+        if sender.keySendMode == .mirror {
+            postKeyEvent(withKeyCode: Key.count.keyCode, isDown: false, sender: sender)
         } else {
             /*let key = getModifierKey(event)
             print(key)
@@ -79,7 +79,7 @@ class KeyEventSender: KeyEventDelegate {
         }
         
         // TO DO: Allow customization of this toggle key
-        let isCommandKey = Bool(event.modifierFlags.rawValue & NSEventModifierFlags.CommandKeyMask.rawValue)
+        let isCommandKey = Bool(event.modifierFlags.rawValue & NSEventModifierFlags.command.rawValue as NSNumber)
         if isCommandKey {
             sender.sendKeyStrokes = !sender.sendKeyStrokes
         }
@@ -111,18 +111,18 @@ class KeyEventSender: KeyEventDelegate {
         // If this is not true but the parameter `postNoMatterWhat` is, then post them anyways.
         // `postNoMatterWhat` is used in the `ViewController`'s `sendKeyStrokes` setter. Even if sendKeyStrokes is set to false,
         // it needs to post the events to properly disconnect from the application.
-        guard (sender.sendKeyStrokes && NSWorkspace.sharedWorkspace().frontmostApplication == NSRunningApplication.currentApplication()) || postNoMatterWhat else {
+        guard (sender.sendKeyStrokes && NSWorkspace.shared().frontmostApplication == NSRunningApplication.current()) || postNoMatterWhat else {
             return
         }
         
-        let keyEvent = CGEventCreateKeyboardEvent(nil, keyCode, isDown)
+        let keyEvent = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: isDown)
         
-        if sender.keySendMode == .Mirror {
+        if sender.keySendMode == .mirror {
             // Post the key event to all toontown applications
-            for (index,var application) in sender.ttApplications.enumerate() {
+            for (index,var application) in sender.ttApplications.enumerated() {
                 // Toontown application has been terminated. Remove it from the list.
-                if application.application.terminated {
-                    sender.ttApplications.removeAtIndex(index)
+                if application.application.isTerminated {
+                    sender.ttApplications.remove(at: index)
                     return
                 }
                 
@@ -130,52 +130,52 @@ class KeyEventSender: KeyEventDelegate {
                 if !application.activated { continue }
                 
                 // Convert the process serial number to an UnsafeMutablePointer<Void>
-                let address = withUnsafeMutablePointer(&application.psn) {UnsafeMutablePointer<Void>($0)}
+                let address = withUnsafeMutablePointer(to: &application.psn) {UnsafeMutableRawPointer($0)}
                 
-                CGEventPostToPSN(address, keyEvent)
+                keyEvent?.postToPSN(processSerialNumber: address)
             }
         } else {
             // In .Multi mode
-            guard var app1 = sender.toontownApplication1, app2 = sender.toontownApplication2 else {
+            guard var app1 = sender.toontownApplication1, var app2 = sender.toontownApplication2 else {
                 // Alert user that something went wrong
                 return
             }
             
-            let address1 = withUnsafeMutablePointer(&app1.psn) {UnsafeMutablePointer<Void>($0)}
-            let address2 = withUnsafeMutablePointer(&app2.psn) {UnsafeMutablePointer<Void>($0)}
+            let address1 = withUnsafeMutablePointer(to: &app1.psn) {UnsafeMutableRawPointer($0)}
+            let address2 = withUnsafeMutablePointer(to: &app2.psn) {UnsafeMutableRawPointer($0)}
             
             let key = Key(value: keyCode)
             switch key {
             // Events posted to the first application
-            case .Up, .Left, .Down, .Right:
-                let keyEvent = CGEventCreateKeyboardEvent(nil, key.keyCode, isDown)
-                CGEventPostToPSN(address1, keyEvent)
-            case .Period:
-                let keyEvent = CGEventCreateKeyboardEvent(nil, Key.LeftControl.keyCode, isDown)
-                CGEventPostToPSN(address1, keyEvent)
+            case .up, .left, .down, .right:
+                let keyEvent = CGEvent(keyboardEventSource: nil, virtualKey: key.keyCode, keyDown: isDown)
+                keyEvent?.postToPSN(processSerialNumber: address1)
+            case .period:
+                let keyEvent = CGEvent(keyboardEventSource: nil, virtualKey: Key.leftControl.keyCode, keyDown: isDown)
+                keyEvent?.postToPSN(processSerialNumber: address1)
                 
             // Events posted to the second application
-            case .W:
-                let keyEvent = CGEventCreateKeyboardEvent(nil, Key.Up.keyCode, isDown)
-                CGEventPostToPSN(address2, keyEvent)
-            case .A:
-                let keyEvent = CGEventCreateKeyboardEvent(nil, Key.Left.keyCode, isDown)
-                CGEventPostToPSN(address2, keyEvent)
-            case .S:
-                let keyEvent = CGEventCreateKeyboardEvent(nil, Key.Down.keyCode, isDown)
-                CGEventPostToPSN(address2, keyEvent)
-            case .D:
-                let keyEvent = CGEventCreateKeyboardEvent(nil, Key.Right.keyCode, isDown)
-                CGEventPostToPSN(address2, keyEvent)
-            case .F:
-                let keyEvent = CGEventCreateKeyboardEvent(nil, Key.LeftControl.keyCode, isDown)
-                CGEventPostToPSN(address2, keyEvent)
+            case .w:
+                let keyEvent = CGEvent(keyboardEventSource: nil, virtualKey: Key.up.keyCode, keyDown: isDown)
+                keyEvent?.postToPSN(processSerialNumber: address2)
+            case .a:
+                let keyEvent = CGEvent(keyboardEventSource: nil, virtualKey: Key.left.keyCode, keyDown: isDown)
+                keyEvent?.postToPSN(processSerialNumber: address2)
+            case .s:
+                let keyEvent = CGEvent(keyboardEventSource: nil, virtualKey: Key.down.keyCode, keyDown: isDown)
+                keyEvent?.postToPSN(processSerialNumber: address2)
+            case .d:
+                let keyEvent = CGEvent(keyboardEventSource: nil, virtualKey: Key.right.keyCode, keyDown: isDown)
+                keyEvent?.postToPSN(processSerialNumber: address2)
+            case .f:
+                let keyEvent = CGEvent(keyboardEventSource: nil, virtualKey: Key.leftControl.keyCode, keyDown: isDown)
+                keyEvent?.postToPSN(processSerialNumber: address2)
                 
             // Events posted to both applications
-            case .Space:
-                let keyEvent = CGEventCreateKeyboardEvent(nil, Key.ForwardDelete.keyCode, isDown)
-                CGEventPostToPSN(address1, keyEvent)
-                CGEventPostToPSN(address2, keyEvent)
+            case .space:
+                let keyEvent = CGEvent(keyboardEventSource: nil, virtualKey: Key.forwardDelete.keyCode, keyDown: isDown)
+                keyEvent?.postToPSN(processSerialNumber: address1)
+                keyEvent?.postToPSN(processSerialNumber: address2)
             default: break
             }
         }

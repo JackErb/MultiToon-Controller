@@ -21,34 +21,34 @@ struct ApplicationInfo {
 }
 
 func getProcessSerialNumberOfFrontmostApplication() -> ProcessSerialNumber {
-    let low = UInt32(NSWorkspace.sharedWorkspace().activeApplication()!["NSApplicationProcessSerialNumberLow"] as! Int)
-    let high = UInt32(NSWorkspace.sharedWorkspace().activeApplication()!["NSApplicationProcessSerialNumberHigh"] as! Int)
+    let low = UInt32(NSWorkspace.shared().activeApplication()!["NSApplicationProcessSerialNumberLow"] as! Int)
+    let high = UInt32(NSWorkspace.shared().activeApplication()!["NSApplicationProcessSerialNumberHigh"] as! Int)
     return ProcessSerialNumber(highLongOfPSN: high, lowLongOfPSN: low)
 }
 
 
-func searchForToontownApplications(sender sender: ViewController) {
+func searchForToontownApplications(sender: ViewController) {
     sender.animateProgressIndicator(true)
     sender.sendKeyStrokes = false
     
     var ttAppInfo = [ApplicationInfo]()
     var toontownApplications = [NSRunningApplication]()
-    for app in NSWorkspace.sharedWorkspace().runningApplications {
+    for app in NSWorkspace.shared().runningApplications {
         if app.localizedName == "Toontown Rewritten" && app.bundleIdentifier == nil {
             toontownApplications.append(app)
             
             // Multi sends to a max of two applications
-            if sender.keySendMode == .Multi && toontownApplications.count == 2 { break }
+            if sender.keySendMode == .multi && toontownApplications.count == 2 { break }
         }
     }
     
     guard toontownApplications.count > 0 else {
-        if sender.keySendMode == .Multi {
+        if sender.keySendMode == .multi {
             let alert = NSAlert()
-            alert.addButtonWithTitle("Ok")
+            alert.addButton(withTitle: "Ok")
             alert.messageText = "Two Toontown applications could not be found, so key events will stop being sent. Make sure that both applications are open then click the refresh button."
             
-            alert.beginSheetModalForWindow(sender.view.window!) { response in }
+            alert.beginSheetModal(for: sender.view.window!, completionHandler: { response in }) 
 
         }
         
@@ -56,16 +56,16 @@ func searchForToontownApplications(sender sender: ViewController) {
         return
     }
     
-    var iterator = toontownApplications.generate()
+    var iterator = toontownApplications.makeIterator()
     
-    var getInfo: (NSRunningApplication -> Void)!
+    var getInfo: ((NSRunningApplication) -> Void)!
     getInfo = { (app: NSRunningApplication) in
-        app.activateWithOptions(.ActivateIgnoringOtherApps)
+        app.activate(options: .activateIgnoringOtherApps)
         
         // Closure is delayed because the application is not activated on the main thread, and it may take some time for it
         // to do so. If the application is currently doing something intensive (i.e. loading content), it may take awhile.
         delay (0.2) {
-            if app.active {
+            if app.isActive {
                 ttAppInfo.append(ApplicationInfo(application: app, psn: getProcessSerialNumberOfFrontmostApplication()))
             }
             
@@ -76,15 +76,15 @@ func searchForToontownApplications(sender sender: ViewController) {
                 sender.animateProgressIndicator(false)
                 sender.sendKeyStrokes = true
                 
-                if sender.keySendMode == .Multi {
+                if sender.keySendMode == .multi {
                     if ttAppInfo.count < 2 {
                         // Display error that two applications couldn't be found
                         let alert = NSAlert()
-                        alert.addButtonWithTitle("Ok")
+                        alert.addButton(withTitle: "Ok")
                         alert.messageText = "Two Toontown applications could not be found. Make sure that both applications are open then click the refresh button."
                         alert.informativeText = "Key events will not be sent until a second application is found."
                         
-                        alert.beginSheetModalForWindow(sender.view.window!) { response in }
+                        alert.beginSheetModal(for: sender.view.window!, completionHandler: { response in }) 
                     } else {
                         sender.toontownApplication1 = ttAppInfo[0]
                         sender.toontownApplication2 = ttAppInfo[1]
@@ -93,7 +93,7 @@ func searchForToontownApplications(sender sender: ViewController) {
                     sender.ttApplications = ttAppInfo
                 }
                 
-                NSRunningApplication.currentApplication().activateWithOptions(.ActivateIgnoringOtherApps)
+                NSRunningApplication.current().activate(options: .activateIgnoringOtherApps)
             }
         }
     }
