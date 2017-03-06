@@ -20,6 +20,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Sets the ViewController as the first responder of the window so that it gets key events.
         ViewController.sharedController.view.window!.makeFirstResponder(ViewController.sharedController)
         ViewController.sharedController.view.window!.level = Int(CGWindowLevelForKey(.maximumWindow))
+        
+        ViewController.sharedController.view.window!.title = "Key Cloner"
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
